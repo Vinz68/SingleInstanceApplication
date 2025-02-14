@@ -7,8 +7,11 @@ internal class Program
 {
 
     /// <summary>
-    /// This example demonstrates how to prevent more than one instance of an application from running at the same time on a computer.
+    /// This example demonstrates how to prevent more than one instance of an application 
+    /// from running at the same time on a computer.
+    /// 
     /// Simple example with all source code in a single file "SingleInstanceAppWrapper.cs".
+    /// 
     /// </summary>
     /// <param name="args"></param>
     static void Main(string[] args)
