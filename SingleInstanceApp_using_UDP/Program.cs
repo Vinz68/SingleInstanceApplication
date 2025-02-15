@@ -39,9 +39,6 @@ class Program
 
             Console.WriteLine($"{options.ApplicationName} is running... Press Enter to exit.");
             Console.ReadLine();
-
-            // Clean up
-            singleInstanceWrapper.Dispose();
         }
     }
 }
