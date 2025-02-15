@@ -18,21 +18,20 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public class SingleInstanceAppWrapper : IDisposable
 {
-    private const int UdpPort = 56_253;
     private readonly SingleInstanceAppOptions _options;
     private readonly ILogger _logger;
-    private readonly UdpClient _udpClient;
+    private UdpClient? _udpClientToReceiveRequests;
+    private readonly UdpClient _udpClientToSendRequests;
     private CancellationTokenSource _cts;
 
     public SingleInstanceAppWrapper(SingleInstanceAppOptions options, ILogger logger)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options;
+        _logger = logger;
 
-        // Set the ReuseAddress option to allow multiple instances to bind to the same address and port
-        _udpClient = new UdpClient(new IPEndPoint(IPAddress.Any, UdpPort));
-        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, false);
+        _udpClientToSendRequests = new UdpClient( _options.UdpPort+1);
+        _udpClientToSendRequests.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _udpClientToSendRequests.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, false);
 
         _cts = new CancellationTokenSource();
     }
@@ -45,13 +44,12 @@ public class SingleInstanceAppWrapper : IDisposable
         // Send ApplicationAliveRequest
         string requestMessage = $"ApplicationAliveRequest:{_options.ApplicationGuid}";
         byte[] requestBytes = Encoding.UTF8.GetBytes(requestMessage);
-        await _udpClient.SendAsync(requestBytes, requestBytes.Length, new IPEndPoint(ipAddress, UdpPort));
+        await _udpClientToSendRequests.SendAsync(requestBytes, requestBytes.Length, new IPEndPoint(ipAddress, _options.UdpPort));
 
-        // Wait for a response
-        _udpClient.Client.ReceiveTimeout = _options.ReceiveTimeout;
         try
         {
-            UdpReceiveResult result = await _udpClient.ReceiveAsync();
+            using CancellationTokenSource cts = new(_options.ReceiveTimeout);
+            UdpReceiveResult result = await _udpClientToSendRequests.ReceiveAsync(cts.Token);
             string responseMessage = Encoding.UTF8.GetString(result.Buffer);
 
             if (responseMessage == $"ApplicationAliveResponse:{_options.ApplicationGuid}")
@@ -60,10 +58,19 @@ public class SingleInstanceAppWrapper : IDisposable
                 return false; // Another instance is running
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Timeout occurred via cancellation, indicating no other instance is running
+            return true;
+        }
         catch (SocketException)
         {
-            // Timeout occurred, no other instance is running
+            // Other socket errors; defaulting to true
             return true;
+        }
+        finally
+        {
+            _udpClientToSendRequests.Close();
         }
 
         return true;
@@ -71,6 +78,11 @@ public class SingleInstanceAppWrapper : IDisposable
 
     public void StartListeningForApplicationAliveRequests()
     {
+        // Set the ReuseAddress option to allow multiple instances to bind to the same address and port
+        _udpClientToReceiveRequests = new UdpClient(new IPEndPoint(IPAddress.Any, _options.UdpPort));
+        _udpClientToReceiveRequests.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _udpClientToReceiveRequests.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, false);
+
         _ = ListenForApplicationAliveRequests(_cts.Token);
     }
 
@@ -81,7 +93,7 @@ public class SingleInstanceAppWrapper : IDisposable
             try
             {
                 // Listen for incoming UDP messages
-                UdpReceiveResult result = await _udpClient.ReceiveAsync(stopToken);
+                UdpReceiveResult result = await _udpClientToReceiveRequests!.ReceiveAsync(stopToken);
                 string message = Encoding.UTF8.GetString(result.Buffer);
 
                 if (message.StartsWith("ApplicationAliveRequest:"))
@@ -94,7 +106,7 @@ public class SingleInstanceAppWrapper : IDisposable
                         // Send ApplicationAliveResponse
                         string responseMessage = $"ApplicationAliveResponse:{receivedGuid}";
                         byte[] responseBytes = Encoding.UTF8.GetBytes(responseMessage);
-                        await _udpClient.SendAsync(responseBytes, responseBytes.Length, result.RemoteEndPoint);
+                        await _udpClientToReceiveRequests!.SendAsync(responseBytes, responseBytes.Length, result.RemoteEndPoint);
                     }
                 }
             }
@@ -121,7 +133,8 @@ public class SingleInstanceAppWrapper : IDisposable
     {
         StopListeningForApplicationAliveRequests();
 
-        _udpClient?.Close();
+        _udpClientToSendRequests?.Close();
+        _udpClientToReceiveRequests?.Close();
         _cts?.Dispose();
     }
 }
