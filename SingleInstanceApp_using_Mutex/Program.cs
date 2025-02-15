@@ -1,19 +1,17 @@
 ﻿namespace SingleInstanceApplication;
 
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using System;
 
+/// <summary>
+/// This example demonstrates how to prevent more than one instance of an application 
+/// from running at the same time on a computer.
+/// 
+/// Simple example with all source code in a single file "SingleInstanceAppWrapper.cs".
+/// 
+/// </summary>
 internal class Program
 {
-
-    /// <summary>
-    /// This example demonstrates how to prevent more than one instance of an application 
-    /// from running at the same time on a computer.
-    /// 
-    /// Simple example with all source code in a single file "SingleInstanceAppWrapper.cs".
-    /// 
-    /// </summary>
     static void Main(string[] args)
     {
         // Replace the string with your application's unique GUID

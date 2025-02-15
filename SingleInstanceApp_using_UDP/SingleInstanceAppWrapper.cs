@@ -24,18 +24,22 @@ public class SingleInstanceAppWrapper : IDisposable
     private readonly UdpClient _udpClientToSendRequests;
     private CancellationTokenSource _cts;
 
-    public SingleInstanceAppWrapper(SingleInstanceAppOptions options, ILogger logger)
+    public SingleInstanceAppWrapper(ILogger logger,SingleInstanceAppOptions? options = null)
     {
-        _options = options;
         _logger = logger;
+        _options = options ?? new SingleInstanceAppOptions();
 
-        _udpClientToSendRequests = new UdpClient( _options.UdpPort+1);
+        _udpClientToSendRequests = new UdpClient(_options.UdpPort + 1);
         _udpClientToSendRequests.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         _udpClientToSendRequests.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, false);
 
         _cts = new CancellationTokenSource();
     }
 
+    /// <summary>
+    /// Checks if the application is the first instance running on the local computer or on the entire LAN.
+    /// </summary>
+    /// <returns>true when application is first instance, false when application is already running</returns>
     public async Task<bool> IsApplicationFirstInstanceAsync()
     {
         // Determine the IP address to use based on the CheckEntireLan option
@@ -53,10 +57,7 @@ public class SingleInstanceAppWrapper : IDisposable
             string responseMessage = Encoding.UTF8.GetString(result.Buffer);
 
             if (responseMessage == $"ApplicationAliveResponse:{_options.ApplicationGuid}")
-            {
-                _logger.LogInformation("{ApplicationName} is already running. Closing this instance...", _options.ApplicationName);
                 return false; // Another instance is running
-            }
         }
         catch (OperationCanceledException)
         {

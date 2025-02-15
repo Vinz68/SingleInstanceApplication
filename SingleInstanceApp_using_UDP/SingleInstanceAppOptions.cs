@@ -30,6 +30,7 @@ public class SingleInstanceAppOptions
     /// <summary>
     /// Gets or sets the UDP port to use for communication.
     /// Default: 56253.
+    /// Note the UDP port +1 is also used for sending/receiving UDP messages.
     /// </summary>
     public int UdpPort { get; set; } = 56_565;
 }
