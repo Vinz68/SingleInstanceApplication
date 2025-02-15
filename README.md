@@ -1,6 +1,7 @@
 # SingleInstanceApplication
 
 This repository contains 2 different ways of single instance applications in C#.
+
 It is platform independent and can be run on Windows, Linux and MacOS.
 
 The usage is simple in both examples:
